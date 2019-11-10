@@ -18,6 +18,7 @@ import {
 	FileLoader,
 	FrontSide,
 	Group,
+	InstancedMesh,
 	InterleavedBuffer,
 	InterleavedBufferAttribute,
 	Interpolant,
@@ -228,6 +229,10 @@ var GLTFLoader = ( function () {
 
 					switch ( extensionName ) {
 
+						case EXTENSIONS.KHR_INSTANCING:
+							extensions[ extensionName ] = new GLTFInstancingExtension( json );
+							break;
+
 						case EXTENSIONS.KHR_LIGHTS_PUNCTUAL:
 							extensions[ extensionName ] = new GLTFLightsExtension( json );
 							break;
@@ -323,6 +328,7 @@ var GLTFLoader = ( function () {
 	var EXTENSIONS = {
 		KHR_BINARY_GLTF: 'KHR_binary_glTF',
 		KHR_DRACO_MESH_COMPRESSION: 'KHR_draco_mesh_compression',
+		KHR_INSTANCING: 'KHR_instancing',
 		KHR_LIGHTS_PUNCTUAL: 'KHR_lights_punctual',
 		KHR_MATERIALS_PBR_SPECULAR_GLOSSINESS: 'KHR_materials_pbrSpecularGlossiness',
 		KHR_MATERIALS_UNLIT: 'KHR_materials_unlit',
@@ -1045,6 +1051,66 @@ var GLTFLoader = ( function () {
 
 	}
 
+	/**
+	 * Instancing Extension
+	 *
+	 * Specification: https://github.com/KhronosGroup/glTF/pull/1691
+	 */
+	function GLTFInstancingExtension() {
+
+		this.name = EXTENSIONS.KHR_INSTANCING;
+
+	}
+
+	GLTFInstancingExtension.prototype.createInstancedMesh = function ( parser, nodeDef, mesh ) {
+
+		var extensionDef = nodeDef.extensions[ this.name ];
+
+		var meshPromise = extensionDef.mesh
+			? parser.getDependency( 'mesh', extensionDef.mesh )
+			: Promise.resolve( mesh );
+
+		var transformPromise = parser.getDependency( 'accessor', extensionDef.attributes.TRANSFORM );
+
+		return Promise.all( [
+
+			meshPromise,
+			transformPromise
+
+		] )
+			.then( function ( dependencies ) {
+
+				var mesh = dependencies[ 0 ];
+				var transform = dependencies[ 1 ];
+
+				var instancedMesh = new InstancedMesh( mesh.geometry, mesh.material, transform.count );
+				var matrix = new Matrix4();
+
+				for ( var i = 0; i < transform.count; i ++ ) {
+
+					var m = transform.array.slice( i * 12, ( i + 1 ) * 12 );
+
+					matrix.set(
+
+						m[ 0 ], m[ 1 ], m[ 2 ], m[ 3 ],
+						m[ 4 ], m[ 5 ], m[ 6 ], m[ 7 ],
+						m[ 8 ], m[ 9 ], m[ 10 ], m[ 11 ],
+						0, 0, 0, 1
+
+					);
+
+					instancedMesh.setMatrixAt( i, matrix );
+
+				}
+
+				Object3D.prototype.copy.call( mesh, instancedMesh );
+
+				return instancedMesh;
+
+			} );
+
+	}
+
 	/*********************************/
 	/********** INTERPOLATION ********/
 	/*********************************/
@@ -1183,7 +1249,8 @@ var GLTFLoader = ( function () {
 		'VEC4': 4,
 		'MAT2': 4,
 		'MAT3': 9,
-		'MAT4': 16
+		'MAT4': 16,
+		'MAT4x3':  12,
 	};
 
 	var ATTRIBUTES = {
@@ -2989,6 +3056,20 @@ var GLTFLoader = ( function () {
 					node.scale.fromArray( nodeDef.scale );
 
 				}
+
+			}
+
+			// Apply instancing last, as it requires asynchronous resources.
+			if ( nodeDef.extensions && nodeDef.extensions[ EXTENSIONS.KHR_INSTANCING ] !== undefined ) {
+
+				if ( ! node.isMesh ) {
+
+					console.warn( 'THREE.GLTFLoader: Multi-primitive instanced meshes not yet supported.' );
+					return node;
+
+				}
+
+				return extensions[ EXTENSIONS.KHR_INSTANCING ].createInstancedMesh( parser, nodeDef, node );
 
 			}
 
