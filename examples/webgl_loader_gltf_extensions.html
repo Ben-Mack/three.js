@@ -36,6 +36,18 @@
 			var clock = new THREE.Clock();
 
 			var scenes = {
+				'ParticleTest': {
+					name: 'ParticleTest',
+					url: './models/gltf/ParticleTest.gltf',
+					author: 'Don McCurdy',
+					authorURL: 'https://www.donmccurdy.com/',
+					cameraPos: new THREE.Vector3( 20, 10, 30 ),
+					objectPosition: new THREE.Vector3( 0, 0, 0 ),
+					extensions: [ 'glTF-Instancing' ],
+					addEnvMap: true,
+					addLights: true,
+					addGround: true
+				},
 				'Instancing (Simple)': {
 					name: 'Instancing (Simple)',
 					url: './models/gltf/instancing_simple/instancing_simple.gltf',

@@ -1001,7 +1001,7 @@ THREE.GLTFLoader = ( function () {
 
 		var extensionDef = nodeDef.extensions[ this.name ];
 
-		var meshPromise = extensionDef.mesh
+		var meshPromise = extensionDef.mesh !== undefined
 			? parser.getDependency( 'mesh', extensionDef.mesh )
 			: Promise.resolve( mesh );
 
