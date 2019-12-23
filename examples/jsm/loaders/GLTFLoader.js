@@ -832,7 +832,8 @@ var GLTFLoader = ( function () {
 					fog: true,
 					lights: true,
 					opacity: params.opacity,
-					transparent: params.transparent
+					transparent: params.transparent,
+					depthWrite: params.depthWrite
 				} );
 
 				material.isGLTFSpecularGlossinessMaterial = true;
@@ -2269,6 +2270,9 @@ var GLTFLoader = ( function () {
 		if ( alphaMode === ALPHA_MODES.BLEND ) {
 
 			materialParams.transparent = true;
+
+			// See: https://github.com/mrdoob/three.js/issues/17706
+			materialParams.depthWrite = false;
 
 		} else {
 
