@@ -997,14 +997,11 @@ THREE.GLTFLoader = ( function () {
 
 	}
 
-	GLTFInstancingExtension.prototype.createInstancedMesh = function ( parser, nodeDef, mesh ) {
+	GLTFInstancingExtension.prototype.createInstancedMesh = function ( parser, nodeDef, node ) {
 
 		var extensionDef = nodeDef.extensions[ this.name ];
-
-		var meshPromise = extensionDef.mesh !== undefined
-			? parser.getDependency( 'mesh', extensionDef.mesh )
-			: Promise.resolve( mesh );
-
+		var meshIndex = nodeDef.mesh !== undefined ? nodeDef.mesh : extensionDef.mesh;
+		var meshPromise = parser.getDependency( 'mesh', meshIndex );
 		var transformPromise = parser.getDependency( 'accessor', extensionDef.attributes.TRANSFORM );
 
 		return Promise.all( [
@@ -1038,7 +1035,11 @@ THREE.GLTFLoader = ( function () {
 
 				}
 
-				Object3D.prototype.copy.call( mesh, instancedMesh );
+				// Copy mesh properties first, then node properties. These may be the same object.
+				THREE.Object3D.prototype.copy.call( instancedMesh, mesh );
+				THREE.Object3D.prototype.copy.call( instancedMesh, node );
+
+				parser.assignFinalMaterial( instancedMesh );
 
 				return instancedMesh;
 
@@ -2056,6 +2057,7 @@ THREE.GLTFLoader = ( function () {
 		var useVertexColors = geometry.attributes.color !== undefined;
 		var useFlatShading = geometry.attributes.normal === undefined;
 		var useSkinning = mesh.isSkinnedMesh === true;
+		var useInstancing = mesh.isInstancedMesh === true;
 		var useMorphTargets = Object.keys( geometry.morphAttributes ).length > 0;
 		var useMorphNormals = useMorphTargets && geometry.morphAttributes.normal !== undefined;
 
@@ -2100,12 +2102,13 @@ THREE.GLTFLoader = ( function () {
 		}
 
 		// Clone the material if it will be modified
-		if ( useVertexTangents || useVertexColors || useFlatShading || useSkinning || useMorphTargets ) {
+		if ( useVertexTangents || useVertexColors || useFlatShading || useSkinning || useInstancing || useMorphTargets ) {
 
 			var cacheKey = 'ClonedMaterial:' + material.uuid + ':';
 
 			if ( material.isGLTFSpecularGlossinessMaterial ) cacheKey += 'specular-glossiness:';
 			if ( useSkinning ) cacheKey += 'skinning:';
+			if ( useInstancing ) cacheKey += 'instancing:';
 			if ( useVertexTangents ) cacheKey += 'vertex-tangents:';
 			if ( useVertexColors ) cacheKey += 'vertex-colors:';
 			if ( useFlatShading ) cacheKey += 'flat-shading:';
@@ -2997,7 +3000,7 @@ THREE.GLTFLoader = ( function () {
 			// Apply instancing last, as it requires asynchronous resources.
 			if ( nodeDef.extensions && nodeDef.extensions[ EXTENSIONS.KHR_INSTANCING ] !== undefined ) {
 
-				if ( ! node.isMesh ) {
+				if ( ! node.isMesh && node.children.length > 0 ) {
 
 					console.warn( 'THREE.GLTFLoader: Multi-primitive instanced meshes not yet supported.' );
 					return node;
